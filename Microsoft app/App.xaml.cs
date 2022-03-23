@@ -1,13 +1,15 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using Microsoft.QueryStringDotNET;
 using Microsoft.Toolkit.Uwp.Notifications;
+using Microsoft.Win32;
 using Windows.Storage;
 using Windows.UI.Notifications;
 
@@ -67,6 +69,57 @@ namespace Microsoft_app
             }
 
             notification.Show();
+        }
+
+        public async Task ReadFromRegistryAndFindDiff()
+        {
+            while (true)
+            {
+                JObject targetJObject = new JObject();
+                try
+                {
+                    // Initial Data
+                    var initialData = File.ReadAllText(@"Responses\Data.json");
+                    var sourceJObject = JObject.Parse(initialData);
+
+                    // Read from registry
+                    try
+                    {
+                        //opening the subkey  
+                        RegistryKey key = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\OurSettings");
+
+                        //If it does exist, retrieve the stored values  
+                        if (key != null)
+                        {
+                            var registryValue = key.GetValue("Setting1");
+                            var convertToStringRegistryValue = Convert.ToString(registryValue);
+                            targetJObject = JObject.Parse(convertToStringRegistryValue);
+                            key.Close();
+                        }
+                    }
+                    catch (Exception ex)  //just for demonstration...it's always best to handle specific exceptions
+                    {
+                        //react appropriately
+                    }
+
+                    var jsondiffPatch = new JsonDiffPatch();
+                    JToken diffResult = jsondiffPatch.Diff(sourceJObject, targetJObject);
+                    var formatter = new JsonDeltaFormatter();
+                    var operations = formatter.Format(diffResult);
+
+                    if (operations.Count > 0)
+                    {
+                        // Send Notifications
+                        break;
+                    }
+
+                    // Wait for 3 seconds
+                    Thread.Sleep(3000);
+                }
+                catch (Exception e)
+                {
+                }
+            }
         }
     }
 }
